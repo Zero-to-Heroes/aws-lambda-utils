@@ -123,4 +123,28 @@ export class S3 {
 			});
 		});
 	}
+
+	public async loadReplayString(replayKey: string): Promise<string> {
+		return new Promise<string>(resolve => {
+			this.loadReplayStringInternal(replayKey, replayString => resolve(replayString));
+		});
+	}
+
+	private async loadReplayStringInternal(replayKey: string, callback, retriesLeft = 15): Promise<string> {
+		if (retriesLeft <= 0) {
+			console.error('Could not load replay xml', replayKey);
+			callback(null);
+			return;
+		}
+		const data = replayKey.endsWith('.zip')
+			? await this.readZippedContent('xml.firestoneapp.com', replayKey)
+			: await this.readContentAsString('xml.firestoneapp.com', replayKey);
+		// const data = await http(`https://s3-us-west-2.amazonaws.com/xml.firestoneapp.com/${replayKey}`);
+		// If there is nothing, we get the S3 "no key found" error
+		if (!data || data.length < 5000) {
+			setTimeout(() => this.loadReplayStringInternal(replayKey, callback, retriesLeft - 1), 500);
+			return;
+		}
+		callback(data);
+	}
 }
