@@ -12,9 +12,10 @@ export const logger = {
 		console.warn(message, ...optionalParams);
 	},
 	error(message?: any, ...optionalParams: any[]) {
-		console.error(message, ...optionalParams);
 		console.log('Debug buffer');
 		this.debugCallsBuffer.forEach(debugLogCall => debugLogCall());
+		console.log('End debug buffer');
+		console.error(message, ...optionalParams);
 	},
 	clear() {
 		this.debugCallsBuffer = [];
@@ -26,6 +27,6 @@ export const logBeforeTimeout = (context: Context) => {
 	const timeoutId = setTimeout(() => {
 		logger.error('About to timeout');
 	}, deadline);
-
+	logger.clear();
 	return () => clearTimeout(timeoutId);
 };
