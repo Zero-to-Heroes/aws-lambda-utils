@@ -2,6 +2,7 @@ import { S3 as S3AWS } from 'aws-sdk';
 import { GetObjectRequest, Metadata } from 'aws-sdk/clients/s3';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
+import { logger } from './logger';
 
 export class S3 {
 	private readonly s3: S3AWS;
@@ -57,6 +58,7 @@ export class S3 {
 	}
 
 	private readZippedContentInternal(bucketName: string, key: string, callback, retriesLeft = 10) {
+		logger.debug('trying to read zipped content', bucketName, key, retriesLeft);
 		if (retriesLeft <= 0) {
 			console.error('could not read s3 object', bucketName, key);
 			callback(null);
@@ -72,9 +74,13 @@ export class S3 {
 				return;
 			}
 			try {
+				logger.debug('success, loadAsync');
 				const zipContent = await loadAsync(data.Body as any);
+				logger.debug('zipContent loaded');
 				const file = Object.keys(zipContent.files)[0];
+				logger.debug('file retrieve', file);
 				const objectContent = await zipContent.file(file).async('string');
+				logger.debug('objectContent', objectContent);
 				callback(objectContent);
 			} catch (e) {
 				console.warn('could not read s3 object', bucketName, key, err, retriesLeft, e);
