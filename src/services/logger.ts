@@ -3,7 +3,8 @@ import { Context } from 'aws-lambda';
 export const logger = {
 	debugCallsBuffer: [] as (() => void)[],
 	debug(message?: any, ...optionalParams: any[]) {
-		this.debugCallsBuffer.push(() => console.debug(message, ...optionalParams));
+		const currentDate = new Date().toISOString();
+		this.debugCallsBuffer.push(() => console.debug(currentDate, message, ...optionalParams));
 	},
 	log(message?: any, ...optionalParams: any[]) {
 		console.log(message, ...optionalParams);
