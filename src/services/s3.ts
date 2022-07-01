@@ -1,5 +1,5 @@
 import { S3 as S3AWS } from 'aws-sdk';
-import { GetObjectRequest, Metadata } from 'aws-sdk/clients/s3';
+import { GetObjectRequest, Metadata, PutObjectRequest } from 'aws-sdk/clients/s3';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
 import { logger } from './logger';
@@ -110,18 +110,23 @@ export class S3 {
 		bucket: string,
 		fileName: string,
 		type = 'application/json',
+		encoding?: 'gzip' | null,
 	): Promise<boolean> {
 		return new Promise<boolean>((resolve, reject) => {
-			const input = {
-				Body: type === 'application/json' ? JSON.stringify(content) : content,
+			const input: PutObjectRequest = {
+				Body: type === 'application/json' && encoding !== 'gzip' ? JSON.stringify(content) : content,
 				Bucket: bucket,
 				Key: fileName,
 				ACL: 'public-read',
 				ContentType: type,
 			};
+			if (encoding) {
+				input.ContentEncoding = encoding;
+			}
+			logger.debug('writing');
 			this.s3.upload(input, (err, data) => {
 				if (err) {
-					console.error('could not upload file to S3', input, err);
+					console.error('could not upload file to S3', err, input);
 					resolve(false);
 					return;
 				}
