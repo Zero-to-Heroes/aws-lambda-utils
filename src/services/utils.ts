@@ -42,9 +42,12 @@ export const decode = (base64: string): string => {
 	return str;
 };
 
-export const groupByFunction = (keyExtractor: (obj: object | string) => string) => array =>
-	array.reduce((objectsByKeyValue, obj) => {
+export const groupByFunction = <T>(keyExtractor: (obj: T) => string | number) => (
+	array: readonly T[],
+): { [key: string]: readonly T[] } => {
+	return (array ?? []).reduce((objectsByKeyValue, obj) => {
 		const value = keyExtractor(obj);
 		objectsByKeyValue[value] = (objectsByKeyValue[value] || []).concat(obj);
 		return objectsByKeyValue;
 	}, {});
+};

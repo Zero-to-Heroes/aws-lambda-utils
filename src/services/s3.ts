@@ -1,7 +1,16 @@
 import { S3 as S3AWS } from 'aws-sdk';
-import { GetObjectRequest, Metadata, PutObjectRequest } from 'aws-sdk/clients/s3';
+import {
+	DeleteObjectsOutput,
+	DeleteObjectsRequest,
+	GetObjectRequest,
+	ListObjectsV2Request,
+	Metadata,
+	ObjectList,
+	PutObjectRequest,
+} from 'aws-sdk/clients/s3';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
+import { gunzipSync } from 'zlib';
 import { logger } from './logger';
 
 export class S3 {
@@ -25,13 +34,13 @@ export class S3 {
 
 	// Since S3 is only eventually consistent, it's possible that we try to read a file that is not
 	// available yet
-	public async readContentAsString(bucketName: string, key: string): Promise<string> {
+	public async readContentAsString(bucketName: string, key: string, retries = 10): Promise<string> {
 		return new Promise<string>(resolve => {
-			this.readContentAsStringInternal(bucketName, key, result => resolve(result));
+			this.readContentAsStringInternal(bucketName, key, result => resolve(result), retries);
 		});
 	}
 
-	private readContentAsStringInternal(bucketName: string, key: string, callback, retriesLeft = 10) {
+	private readContentAsStringInternal(bucketName: string, key: string, callback, retriesLeft: number) {
 		if (retriesLeft <= 0) {
 			console.error('could not read s3 object', bucketName, key);
 			callback(null);
@@ -48,6 +57,32 @@ export class S3 {
 			}
 			const objectContent = data.Body.toString('utf8');
 			callback(objectContent);
+		});
+	}
+
+	public async readGzipContent(bucketName: string, key: string, retries = 10): Promise<string> {
+		return new Promise<string>(resolve => {
+			this.readGzipContentInternal(bucketName, key, result => resolve(result), retries);
+		});
+	}
+
+	private readGzipContentInternal(bucketName: string, key: string, callback, retriesLeft: number) {
+		if (retriesLeft <= 0) {
+			console.error('could not read s3 object', bucketName, key);
+			callback(null);
+			return;
+		}
+		const input = { Bucket: bucketName, Key: key };
+		this.s3.getObject(input, (err, data) => {
+			if (err) {
+				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+				setTimeout(() => {
+					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1);
+				}, 3000);
+				return;
+			}
+			const result = gunzipSync(data.Body as any).toString('utf8');
+			callback(result);
 		});
 	}
 
@@ -157,5 +192,33 @@ export class S3 {
 			return;
 		}
 		callback(data);
+	}
+
+	public async loadAllFileKeys(bucket: string, folder: string): Promise<ObjectList> {
+		return new Promise<ObjectList>((resolve, reject) => {
+			const request: ListObjectsV2Request = {
+				Bucket: bucket,
+				Prefix: folder,
+			};
+			this.s3.listObjectsV2(request, (err, data) => {
+				resolve(data.Contents);
+			});
+		});
+	}
+
+	public async deleteFiles(bucket: string, keys: readonly string[]): Promise<DeleteObjectsOutput> {
+		return new Promise<DeleteObjectsOutput>((resolve, reject) => {
+			const request: DeleteObjectsRequest = {
+				Bucket: bucket,
+				Delete: {
+					Objects: keys.map(key => ({
+						Key: key,
+					})),
+				},
+			};
+			this.s3.deleteObjects(request, (err, data) => {
+				resolve(data);
+			});
+		});
 	}
 }
