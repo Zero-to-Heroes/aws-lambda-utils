@@ -6,7 +6,7 @@ import {
 	ListObjectsV2Request,
 	Metadata,
 	ObjectList,
-	PutObjectRequest
+	PutObjectRequest,
 } from 'aws-sdk/clients/s3';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
