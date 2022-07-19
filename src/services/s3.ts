@@ -6,7 +6,7 @@ import {
 	ListObjectsV2Request,
 	Metadata,
 	ObjectList,
-	PutObjectRequest,
+	PutObjectRequest
 } from 'aws-sdk/clients/s3';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
@@ -27,7 +27,12 @@ export class S3 {
 				Key: key,
 			};
 			this.s3.getObject(params, (err, data) => {
-				resolve(data.Metadata);
+				if (!!err || !data) {
+					console.error('Could not load metadata', err, data);
+					resolve(null);
+				} else {
+					resolve(data.Metadata);
+				}
 			});
 		});
 	}
