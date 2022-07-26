@@ -1,4 +1,5 @@
 import fetch, { RequestInfo } from 'node-fetch';
+import { logger } from './logger';
 
 export function partitionArray<T>(array: readonly T[], partitionSize: number): readonly T[][] {
 	const workingCopy: T[] = [...array];
@@ -17,7 +18,7 @@ export async function http(request: RequestInfo): Promise<string> {
 					return response.text();
 				},
 				error => {
-					console.warn('could not retrieve review', error);
+					logger.warn('could not retrieve review', error);
 				},
 			)
 			.then(body => {

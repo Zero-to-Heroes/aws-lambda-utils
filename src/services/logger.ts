@@ -1,10 +1,12 @@
 import { Context } from 'aws-lambda';
 
-export const logger = {
-	debugCallsBuffer: [] as (() => void)[],
+export const logger: Logger = {
+	debugCallsBuffer: [] as { timestamp: number; log: () => void }[],
 	debug(message?: any, ...optionalParams: any[]) {
-		const currentDate = new Date().toISOString();
-		this.debugCallsBuffer.push(() => console.debug(currentDate, message, ...optionalParams));
+		this.debugCallsBuffer.push({
+			timestamp: Date.now(),
+			log: () => console.debug(new Date().toISOString(), message, ...optionalParams),
+		});
 	},
 	log(message?: any, ...optionalParams: any[]) {
 		console.log(message, ...optionalParams);
@@ -14,7 +16,9 @@ export const logger = {
 	},
 	error(message?: any, ...optionalParams: any[]) {
 		console.log('Debug buffer');
-		this.debugCallsBuffer.forEach(debugLogCall => debugLogCall());
+		(this.debugCallsBuffer as { timestamp: number; log: () => void }[])
+			.sort((a, b) => a.timestamp - b.timestamp)
+			.forEach(debugLogCall => debugLogCall.log());
 		console.log('End debug buffer');
 		console.error(message, ...optionalParams);
 	},
@@ -31,3 +35,12 @@ export const logBeforeTimeout = (context: Context) => {
 	logger.clear();
 	return () => clearTimeout(timeoutId);
 };
+
+interface Logger {
+	debugCallsBuffer: { timestamp: number; log: () => void }[];
+	debug: (message?: any, ...optionalParams: any[]) => void;
+	log: (message?: any, ...optionalParams: any[]) => void;
+	warn: (message?: any, ...optionalParams: any[]) => void;
+	error: (message?: any, ...optionalParams: any[]) => void;
+	clear: () => void;
+}

@@ -28,7 +28,7 @@ export class S3 {
 			};
 			this.s3.getObject(params, (err, data) => {
 				if (!!err || !data) {
-					console.error('Could not load metadata', err, data);
+					logger.error('Could not load metadata', err, data);
 					resolve(null);
 				} else {
 					resolve(data.Metadata);
@@ -47,14 +47,14 @@ export class S3 {
 
 	private readContentAsStringInternal(bucketName: string, key: string, callback, retriesLeft: number) {
 		if (retriesLeft <= 0) {
-			console.error('could not read s3 object', bucketName, key);
+			logger.error('could not read s3 object', bucketName, key);
 			callback(null);
 			return;
 		}
 		const input = { Bucket: bucketName, Key: key };
 		this.s3.getObject(input, (err, data) => {
 			if (err) {
-				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+				logger.warn('could not read s3 object', bucketName, key, err, retriesLeft);
 				setTimeout(() => {
 					this.readContentAsStringInternal(bucketName, key, callback, retriesLeft - 1);
 				}, 3000);
@@ -73,14 +73,14 @@ export class S3 {
 
 	private readGzipContentInternal(bucketName: string, key: string, callback, retriesLeft: number) {
 		if (retriesLeft <= 0) {
-			console.error('could not read s3 object', bucketName, key);
+			logger.error('could not read s3 object', bucketName, key);
 			callback(null);
 			return;
 		}
 		const input = { Bucket: bucketName, Key: key };
 		this.s3.getObject(input, (err, data) => {
 			if (err) {
-				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+				logger.warn('could not read s3 object', bucketName, key, err, retriesLeft);
 				setTimeout(() => {
 					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1);
 				}, 3000);
@@ -100,14 +100,14 @@ export class S3 {
 	private readZippedContentInternal(bucketName: string, key: string, callback, retriesLeft = 10) {
 		logger.debug('trying to read zipped content', bucketName, key, retriesLeft);
 		if (retriesLeft <= 0) {
-			console.error('could not read s3 object', bucketName, key);
+			logger.error('could not read s3 object', bucketName, key);
 			callback(null);
 			return;
 		}
 		const input = { Bucket: bucketName, Key: key };
 		this.s3.getObject(input, async (err, data) => {
 			if (err) {
-				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+				logger.warn('could not read s3 object', bucketName, key, err, retriesLeft);
 				setTimeout(() => {
 					this.readZippedContentInternal(bucketName, key, callback, retriesLeft - 1);
 				}, 1000);
@@ -120,10 +120,10 @@ export class S3 {
 				const file = Object.keys(zipContent.files)[0];
 				logger.debug('file retrieve', file);
 				const objectContent = await zipContent.file(file).async('string');
-				logger.debug('objectContent', objectContent);
+				logger.debug('objectContent', objectContent?.substring(0, 200));
 				callback(objectContent);
 			} catch (e) {
-				console.warn('could not read s3 object', bucketName, key, err, retriesLeft, e);
+				logger.warn('could not read s3 object', bucketName, key, err, retriesLeft, e);
 				setTimeout(() => {
 					this.readZippedContentInternal(bucketName, key, callback, retriesLeft - 1);
 				}, 1000);
@@ -134,7 +134,9 @@ export class S3 {
 
 	public async writeCompressedFile(content: any, bucket: string, fileName: string): Promise<boolean> {
 		const jszip = new JSZip.default();
+		logger.debug('created empty zip container');
 		jszip.file('replay.xml', content);
+		logger.debug('added content to zip container');
 		const blob: Buffer = await jszip.generateAsync({
 			type: 'nodebuffer',
 			compression: 'DEFLATE',
@@ -142,6 +144,7 @@ export class S3 {
 				level: 9,
 			},
 		});
+		logger.debug('file compressed');
 		return this.writeFile(blob, bucket, fileName, 'application/zip');
 	}
 
@@ -153,25 +156,30 @@ export class S3 {
 		encoding?: 'gzip' | null,
 	): Promise<boolean> {
 		return new Promise<boolean>((resolve, reject) => {
-			const input: PutObjectRequest = {
-				Body: type === 'application/json' && encoding !== 'gzip' ? JSON.stringify(content) : content,
-				Bucket: bucket,
-				Key: fileName,
-				ACL: 'public-read',
-				ContentType: type,
-			};
-			if (encoding) {
-				input.ContentEncoding = encoding;
-			}
-			logger.debug('writing');
-			this.s3.upload(input, (err, data) => {
-				if (err) {
-					console.error('could not upload file to S3', err, input);
-					resolve(false);
-					return;
+			try {
+				const input: PutObjectRequest = {
+					Body: type === 'application/json' && encoding !== 'gzip' ? JSON.stringify(content) : content,
+					Bucket: bucket,
+					Key: fileName,
+					ACL: 'public-read',
+					ContentType: type,
+				};
+				if (encoding) {
+					input.ContentEncoding = encoding;
 				}
-				resolve(true);
-			});
+				logger.debug('writing');
+				this.s3.upload(input, (err, data) => {
+					logger.debug('upload over', err, data);
+					if (err) {
+						logger.error('could not upload file to S3', err, input);
+						resolve(false);
+						return;
+					}
+					resolve(true);
+				});
+			} catch (e) {
+				logger.error('Exception while writing file', e);
+			}
 		});
 	}
 
@@ -183,7 +191,7 @@ export class S3 {
 
 	private async loadReplayStringInternal(replayKey: string, callback, retriesLeft = 15): Promise<string> {
 		if (retriesLeft <= 0) {
-			console.error('Could not load replay xml', replayKey);
+			logger.error('Could not load replay xml', replayKey);
 			callback(null);
 			return;
 		}
