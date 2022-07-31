@@ -10,6 +10,7 @@ import {
 } from 'aws-sdk/clients/s3';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
+import { Readable } from 'stream';
 import { gunzipSync } from 'zlib';
 import { logger } from './logger';
 
@@ -146,6 +147,78 @@ export class S3 {
 		});
 		logger.debug('file compressed');
 		return this.writeFile(blob, bucket, fileName, 'application/zip');
+	}
+
+	public async writeArrayAsMultipart(
+		content: readonly any[],
+		bucket: string,
+		fileName: string,
+		type = 'application/json',
+	): Promise<void> {
+		const multipartCreateResult = await this.s3
+			.createMultipartUpload({
+				Bucket: bucket,
+				Key: fileName,
+				ContentType: type,
+				ACL: 'public-read',
+				StorageClass: 'STANDARD',
+			})
+			.promise();
+
+		const chunkSize = 100_000;
+		let currentIndex = 0;
+		let chunkCount = 1;
+		const uploadPartResults = [];
+		while (currentIndex < content.length) {
+			const data = content.slice(currentIndex, currentIndex + chunkSize);
+			logger.log('uploading multipart data', currentIndex, ' ', chunkCount, ' ', data.length);
+			const strBody = data.map(d => JSON.stringify(d)).join('\n');
+			const uploadPromiseResult = await this.s3
+				.uploadPart({
+					Body: strBody,
+					Bucket: bucket,
+					Key: fileName,
+					PartNumber: chunkCount,
+					UploadId: multipartCreateResult.UploadId,
+				})
+				.promise();
+			logger.log('multipart data upload result', uploadPromiseResult);
+
+			uploadPartResults.push({
+				PartNumber: chunkCount,
+				ETag: uploadPromiseResult.ETag,
+			});
+
+			currentIndex = currentIndex + chunkSize;
+			chunkCount++;
+		}
+
+		const completeUploadResponse = await this.s3
+			.completeMultipartUpload({
+				Bucket: bucket,
+				Key: fileName,
+				MultipartUpload: {
+					Parts: uploadPartResults,
+				},
+				UploadId: multipartCreateResult.UploadId,
+			})
+			.promise();
+		logger.log('multipart upload complete', completeUploadResponse);
+	}
+
+	public readStream(bucketName: string, key: string): Readable {
+		// const parser = JSONStream.parse('*'); // Converts file to JSON objects
+		// const transformStream = new Transform({
+		// 	objectMode: true,
+		// });
+		const stream = this.s3
+			.getObject({
+				Bucket: bucketName,
+				Key: key,
+			})
+			.createReadStream();
+		const finalStream = stream;
+		return finalStream;
 	}
 
 	public async writeFile(
