@@ -17,8 +17,13 @@ import { logger } from './logger';
 export class S3 {
 	private readonly s3: S3AWS;
 
-	constructor() {
-		this.s3 = new S3AWS({ region: 'us-west-2' });
+	constructor(connectTimeout?: number) {
+		this.s3 = new S3AWS({
+			region: 'us-west-2',
+			// httpOptions: {
+			// 	connectTimeout: connectTimeout ?? 10000,
+			// },
+		});
 	}
 
 	public async getObjectMetaData(bucketName: string, key: string): Promise<Metadata> {
