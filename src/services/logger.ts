@@ -3,9 +3,10 @@ import { Context } from 'aws-lambda';
 export const logger: Logger = {
 	debugCallsBuffer: [] as { timestamp: number; log: () => void }[],
 	debug(message?: any, ...optionalParams: any[]) {
+		const date = new Date().toISOString();
 		this.debugCallsBuffer.push({
-			timestamp: Date.now(),
-			log: () => console.debug(new Date().toISOString(), message, ...optionalParams),
+			timestamp: date,
+			log: () => console.debug(date, message, ...optionalParams),
 		});
 	},
 	log(message?: any, ...optionalParams: any[]) {
