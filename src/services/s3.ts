@@ -17,12 +17,15 @@ import { logger } from './logger';
 export class S3 {
 	private readonly s3: S3AWS;
 
-	constructor(connectTimeout?: number) {
+	constructor(options?: { timeout?: number; connectTimeout?: number }) {
 		this.s3 = new S3AWS({
 			region: 'us-west-2',
-			// httpOptions: {
-			// 	connectTimeout: connectTimeout ?? 10000,
-			// },
+			httpOptions: {
+				timeout: options?.timeout ?? 2_000, // time succeed in starting the call
+				connectTimeout: options?.connectTimeout ?? 3_000, // time to wait for a response
+				// the aws-sdk defaults to automatically retrying
+				// if one of these limits are met.
+			},
 		});
 	}
 
