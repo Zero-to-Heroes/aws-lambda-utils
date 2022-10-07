@@ -10,9 +10,9 @@ export function partitionArray<T>(array: readonly T[], partitionSize: number): r
 	return result;
 }
 
-export async function http(request: RequestInfo): Promise<string> {
+export async function http(request: RequestInfo, options?: any): Promise<string> {
 	return new Promise(resolve => {
-		fetch(request)
+		fetch(request, options)
 			.then(
 				response => {
 					return response.text();

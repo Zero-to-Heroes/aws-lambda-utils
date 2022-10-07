@@ -2,7 +2,8 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 import { SecretsManager } from 'aws-sdk';
 import { GetSecretValueRequest, GetSecretValueResponse } from 'aws-sdk/clients/secretsmanager';
-import { default as MySQLServerless, default as serverlessMysql } from 'serverless-mysql';
+import { default as MySQLServerless, default as serverlessMysql, ServerlessMysql } from 'serverless-mysql';
+import { logger } from './logger';
 
 const secretsManager = new SecretsManager({ region: 'us-west-2' });
 let connection, connectionPromise;
@@ -34,6 +35,17 @@ const getConnection = async (): Promise<serverlessMysql.ServerlessMysql> => {
 	connectionPromise = connect();
 
 	return connectionPromise;
+};
+
+export const runQuery = async (mysql: ServerlessMysql, query: string, debug = false): Promise<any[]> => {
+	if (debug) {
+		logger.log('running query', query);
+	}
+	const result: any[] = await mysql.query(query);
+	if (debug) {
+		logger.log('result', result);
+	}
+	return result;
 };
 
 export { getConnection };
