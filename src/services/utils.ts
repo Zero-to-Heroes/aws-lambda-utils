@@ -22,7 +22,7 @@ export async function http(request: RequestInfo, options?: any): Promise<string>
 				},
 			)
 			.then(body => {
-				resolve(body);
+				resolve(body as string);
 			});
 	});
 }
