@@ -7,6 +7,15 @@ export class Sns {
 		this.sns = new SNS({ region: 'us-west-2' });
 	}
 
+	public async notify(topic: string, message: string) {
+		await this.sns
+			.publish({
+				Message: message,
+				TopicArn: topic,
+			})
+			.promise();
+	}
+
 	public async notifyBgPerfectGame(review: any) {
 		const topic = process.env.BG_PERFECT_GAME_SNS_TOPIC;
 		await this.sns
