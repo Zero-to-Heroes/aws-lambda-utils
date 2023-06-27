@@ -1,10 +1,15 @@
 import SecretsManager, { GetSecretValueRequest, GetSecretValueResponse } from 'aws-sdk/clients/secretsmanager';
-import { JwtPayload, verify } from 'jsonwebtoken';
+import { JwtPayload, decode, verify } from 'jsonwebtoken';
 import fetch from 'node-fetch';
 
 const secretsManager = new SecretsManager({ region: 'us-west-2' });
 
 export const validateOwToken = async (token: string): Promise<TokenValidationResult> => {
+	const decoded: JwtPayload = decode(token) as JwtPayload;
+	// Check if JWT token is expired
+	if (decoded.exp * 1000 < Date.now()) {
+		return null;
+	}
 	const response = await fetch(
 		`https://accounts.overwolf.com/tokens/short-lived/users/profile?extensionId=lnknbakkpommmjjdnelmfbjjdbocfpnpbkijjnob`,
 		{
