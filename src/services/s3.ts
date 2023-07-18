@@ -5,6 +5,7 @@ import {
 	GetObjectRequest,
 	ListObjectsV2Request,
 	Metadata,
+	ObjectCannedACL,
 	ObjectList,
 	PutObjectRequest,
 } from 'aws-sdk/clients/s3';
@@ -235,6 +236,7 @@ export class S3 {
 		fileName: string,
 		type = 'application/json',
 		encoding?: 'gzip' | null,
+		ACL: ObjectCannedACL | null = 'public-read',
 	): Promise<boolean> {
 		return new Promise<boolean>((resolve, reject) => {
 			try {
@@ -242,7 +244,7 @@ export class S3 {
 					Body: type === 'application/json' && encoding !== 'gzip' ? JSON.stringify(content) : content,
 					Bucket: bucket,
 					Key: fileName,
-					ACL: 'public-read',
+					ACL: ACL,
 					ContentType: type,
 				};
 				if (encoding) {

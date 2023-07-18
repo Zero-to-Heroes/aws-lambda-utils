@@ -16,15 +16,18 @@ export const logger: Logger = {
 		console.warn(message, ...optionalParams);
 	},
 	error(message?: any, ...optionalParams: any[]) {
+		this.dumpBuffer();
+		console.error(message, ...optionalParams);
+	},
+	clear() {
+		this.debugCallsBuffer = [];
+	},
+	dumpBuffer() {
 		console.log('Debug buffer');
 		(this.debugCallsBuffer as { timestamp: number; log: () => void }[])
 			.sort((a, b) => a.timestamp - b.timestamp)
 			.forEach(debugLogCall => debugLogCall.log());
 		console.log('End debug buffer');
-		console.error(message, ...optionalParams);
-	},
-	clear() {
-		this.debugCallsBuffer = [];
 	},
 };
 
@@ -45,4 +48,5 @@ interface Logger {
 	warn: (message?: any, ...optionalParams: any[]) => void;
 	error: (message?: any, ...optionalParams: any[]) => void;
 	clear: () => void;
+	dumpBuffer: () => void;
 }
