@@ -1,4 +1,4 @@
-import { S3 as S3AWS } from 'aws-sdk';
+import { AWSError, S3 as S3AWS } from 'aws-sdk';
 import {
 	DeleteObjectsOutput,
 	DeleteObjectsRequest,
@@ -9,6 +9,7 @@ import {
 	ObjectList,
 	PutObjectRequest,
 } from 'aws-sdk/clients/s3';
+import { PromiseResult } from 'aws-sdk/lib/request';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
 import { Readable } from 'stream';
@@ -159,10 +160,11 @@ export class S3 {
 	}
 
 	public async writeArrayAsMultipart(
-		content: readonly any[],
+		content: any[],
 		bucket: string,
 		fileName: string,
 		type = 'application/json',
+		chunkSize = 50_000,
 	): Promise<void> {
 		const multipartCreateResult = await this.s3
 			.createMultipartUpload({
@@ -174,13 +176,13 @@ export class S3 {
 			})
 			.promise();
 
-		const chunkSize = 100_000;
-		let currentIndex = 0;
+		// let currentIndex = 0;
 		let chunkCount = 1;
 		const uploadPartResults = [];
-		while (currentIndex < content.length) {
-			const data = content.slice(currentIndex, currentIndex + chunkSize);
-			logger.log('uploading multipart data', currentIndex, ' ', chunkCount, ' ', data.length);
+		while (!!content.length) {
+			const data = content.splice(0, chunkSize);
+			// const data = content.slice(currentIndex, currentIndex + chunkSize);
+			logger.log('uploading multipart data', chunkCount, ' ', data.length);
 			const strBody = data.map(d => JSON.stringify(d)).join('\n');
 			const uploadPromiseResult = await this.s3
 				.uploadPart({
@@ -198,7 +200,7 @@ export class S3 {
 				ETag: uploadPromiseResult.ETag,
 			});
 
-			currentIndex = currentIndex + chunkSize;
+			// currentIndex = currentIndex + chunkSize;
 			chunkCount++;
 		}
 
@@ -317,4 +319,72 @@ export class S3 {
 			});
 		});
 	}
+}
+
+export class S3Multipart {
+	public get processing(): boolean {
+		return this._processing;
+	}
+
+	private currentUpload: PromiseResult<S3AWS.CreateMultipartUploadOutput, AWSError>;
+	private currentPart = 1;
+	private uploadPartResults: { PartNumber: number; ETag: string }[] = [];
+	private _processing = false;
+
+	constructor(private readonly s3: S3AWS) {}
+
+	public initMultipart = async (bucket: string, fileName: string, type = 'application/json') => {
+		this._processing = true;
+		this.currentUpload = await this.s3
+			.createMultipartUpload({
+				Bucket: bucket,
+				Key: fileName,
+				ContentType: type,
+				ACL: 'public-read',
+				StorageClass: 'STANDARD',
+			})
+			.promise();
+		this._processing = false;
+	};
+
+	public uploadPart = async (content: string) => {
+		this._processing = true;
+		const result = await this.s3
+			.uploadPart({
+				Body: content,
+				Bucket: this.currentUpload.Bucket,
+				Key: this.currentUpload.Key,
+				PartNumber: this.currentPart,
+				UploadId: this.currentUpload.UploadId,
+			})
+			.promise();
+		this.uploadPartResults.push({
+			PartNumber: this.currentPart,
+			ETag: result.ETag,
+		});
+		this.currentPart++;
+		this._processing = false;
+	};
+
+	public completeMultipart = async () => {
+		this._processing = true;
+		console.log(
+			'completing multipart upload',
+			this.uploadPartResults,
+			this.currentUpload.Bucket,
+			this.currentUpload.Key,
+			this.currentUpload.UploadId,
+		);
+		await this.s3
+			.completeMultipartUpload({
+				Bucket: this.currentUpload.Bucket,
+				Key: this.currentUpload.Key,
+				MultipartUpload: {
+					Parts: this.uploadPartResults,
+				},
+				UploadId: this.currentUpload.UploadId,
+			})
+			.promise();
+		this._processing = false;
+	};
 }
