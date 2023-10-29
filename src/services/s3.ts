@@ -76,24 +76,39 @@ export class S3 {
 		});
 	}
 
-	public async readGzipContent(bucketName: string, key: string, retries = 10): Promise<string> {
+	public async readGzipContent(
+		bucketName: string,
+		key: string,
+		retries = 10,
+		logFileNotFound = true,
+	): Promise<string> {
 		return new Promise<string>(resolve => {
-			this.readGzipContentInternal(bucketName, key, result => resolve(result), retries);
+			this.readGzipContentInternal(bucketName, key, result => resolve(result), retries, logFileNotFound);
 		});
 	}
 
-	private readGzipContentInternal(bucketName: string, key: string, callback, retriesLeft: number) {
+	private readGzipContentInternal(
+		bucketName: string,
+		key: string,
+		callback,
+		retriesLeft: number,
+		logFileNotFound: boolean,
+	) {
 		if (retriesLeft <= 0) {
-			logger.error('could not read s3 object', bucketName, key);
+			if (logFileNotFound) {
+				logger.error('could not read s3 object', bucketName, key);
+			}
 			callback(null);
 			return;
 		}
 		const input = { Bucket: bucketName, Key: key };
 		this.s3.getObject(input, (err, data) => {
 			if (err) {
-				logger.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+				if (logFileNotFound) {
+					logger.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+				}
 				setTimeout(() => {
-					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1);
+					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1, logFileNotFound);
 				}, 3000);
 				return;
 			}
