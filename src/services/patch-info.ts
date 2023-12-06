@@ -38,4 +38,5 @@ export interface PatchInfo {
 	readonly version: string;
 	readonly name: string;
 	readonly date: string;
+	readonly hasNewBuildNumber?: boolean;
 }
