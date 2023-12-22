@@ -81,9 +81,10 @@ export class S3 {
 		key: string,
 		retries = 10,
 		logFileNotFound = true,
+		timeout = 3000,
 	): Promise<string> {
 		return new Promise<string>(resolve => {
-			this.readGzipContentInternal(bucketName, key, result => resolve(result), retries, logFileNotFound);
+			this.readGzipContentInternal(bucketName, key, result => resolve(result), retries, logFileNotFound, timeout);
 		});
 	}
 
@@ -93,6 +94,7 @@ export class S3 {
 		callback,
 		retriesLeft: number,
 		logFileNotFound: boolean,
+		timeout: number,
 	) {
 		if (retriesLeft <= 0) {
 			if (logFileNotFound) {
@@ -104,12 +106,19 @@ export class S3 {
 		const input = { Bucket: bucketName, Key: key };
 		this.s3.getObject(input, (err, data) => {
 			if (err) {
+				if (retriesLeft - 1 <= 0) {
+					if (logFileNotFound) {
+						logger.error('could not read s3 object', bucketName, key);
+					}
+					callback(null);
+					return;
+				}
 				if (logFileNotFound) {
 					logger.warn('could not read s3 object', bucketName, key, err, retriesLeft);
 				}
 				setTimeout(() => {
-					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1, logFileNotFound);
-				}, 3000);
+					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1, logFileNotFound, timeout);
+				}, timeout);
 				return;
 			}
 			const result = gunzipSync(data.Body as any).toString('utf8');
