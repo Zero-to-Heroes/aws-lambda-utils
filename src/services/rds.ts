@@ -3,7 +3,6 @@
 import { SecretsManager } from 'aws-sdk';
 import { GetSecretValueRequest, GetSecretValueResponse } from 'aws-sdk/clients/secretsmanager';
 import { default as MySQLServerless, ServerlessMysql, default as serverlessMysql } from 'serverless-mysql';
-import { logger } from './logger';
 
 const secretsManager = new SecretsManager({ region: 'us-west-2' });
 let connection, connectionPromise;
@@ -68,11 +67,11 @@ export const getConnectionReadOnly = async (): Promise<serverlessMysql.Serverles
 
 export const runQuery = async (mysql: ServerlessMysql, query: string, debug = false): Promise<any[]> => {
 	if (debug) {
-		logger.log('running query', query);
+		console.log('running query', query);
 	}
 	const result: any[] = await mysql.query(query);
 	if (debug) {
-		logger.log('result', result);
+		console.log('result', result);
 	}
 	return result;
 };

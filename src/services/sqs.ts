@@ -1,5 +1,4 @@
 import { SQS } from 'aws-sdk';
-import { logger } from './logger';
 
 export class Sqs {
 	private readonly sqs: SQS;
@@ -17,7 +16,7 @@ export class Sqs {
 				},
 				(err, data) => {
 					if (err) {
-						logger.error('could not send message to queue', message, queueUrl, err);
+						console.error('could not send message to queue', message, queueUrl, err);
 						resolve();
 						return;
 					}
