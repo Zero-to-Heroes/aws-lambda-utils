@@ -33,7 +33,6 @@ export const logger: Logger = {
 
 export const logBeforeTimeout = (context: Context) => {
 	const deadline = context.getRemainingTimeInMillis() - 200;
-	console.debug('Will timeout in', deadline, 'ms');
 	const timeoutId = setTimeout(() => {
 		console.error('About to timeout');
 	}, deadline);
