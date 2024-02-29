@@ -125,9 +125,9 @@ export class S3 {
 		});
 	}
 
-	public async readZippedContent(bucketName: string, key: string): Promise<string> {
+	public async readZippedContent(bucketName: string, key: string, retries = 3): Promise<string> {
 		return new Promise<string>(resolve => {
-			this.readZippedContentInternal(bucketName, key, result => resolve(result));
+			this.readZippedContentInternal(bucketName, key, result => resolve(result), retries);
 		});
 	}
 
@@ -241,18 +241,19 @@ export class S3 {
 	}
 
 	public readStream(bucketName: string, key: string): Readable {
-		// const parser = JSONStream.parse('*'); // Converts file to JSON objects
-		// const transformStream = new Transform({
-		// 	objectMode: true,
-		// });
-		const stream = this.s3
-			.getObject({
-				Bucket: bucketName,
-				Key: key,
-			})
-			.createReadStream();
-		const finalStream = stream;
-		return finalStream;
+		try {
+			const stream = this.s3
+				.getObject({
+					Bucket: bucketName,
+					Key: key,
+				})
+				.createReadStream();
+			const finalStream = stream;
+			return finalStream;
+		} catch (e) {
+			console.error('could not read stream', e, bucketName, key);
+			return null;
+		}
 	}
 
 	public async writeFile(
