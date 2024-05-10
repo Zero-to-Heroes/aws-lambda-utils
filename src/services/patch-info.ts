@@ -24,6 +24,12 @@ export const getLastArenaPatch = async (): Promise<PatchInfo> => {
 	return config.patches.find(patch => patch.number === patchNumber);
 };
 
+export const getArenaCurrentSeasonPatch = async (): Promise<PatchInfo> => {
+	const config = await getPatchInfos();
+	const patchNumber = config.currentArenaSeasonPatch;
+	return config.patches.find(patch => patch.number === patchNumber);
+};
+
 export interface PatchesConfig {
 	readonly patches: readonly PatchInfo[];
 	readonly currentConstructedMetaPatch: number;
@@ -31,6 +37,7 @@ export interface PatchesConfig {
 	readonly currentDuelsMetaPatch: number;
 	readonly currentArenaMetaPatch: number;
 	readonly currentMercenariesMetaPatch: number;
+	readonly currentArenaSeasonPatch: number;
 }
 
 export interface PatchInfo {
