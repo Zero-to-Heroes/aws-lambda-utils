@@ -5,4 +5,5 @@ export * from './services/s3';
 export * from './services/security';
 export * from './services/sns';
 export * from './services/sqs';
+export * from './services/user';
 export * from './services/utils';

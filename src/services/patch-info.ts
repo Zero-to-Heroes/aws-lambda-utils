@@ -18,6 +18,12 @@ export const getLastConstructedPatch = async (): Promise<PatchInfo> => {
 	return config.patches.find(patch => patch.number === patchNumber);
 };
 
+export const getLastTwistPatch = async (): Promise<PatchInfo> => {
+	const config = await getPatchInfos();
+	const patchNumber = config.currentTwistMetaPatch;
+	return config.patches.find(patch => patch.number === patchNumber);
+};
+
 export const getLastArenaPatch = async (): Promise<PatchInfo> => {
 	const config = await getPatchInfos();
 	const patchNumber = config.currentArenaMetaPatch;
@@ -33,6 +39,7 @@ export const getArenaCurrentSeasonPatch = async (): Promise<PatchInfo> => {
 export interface PatchesConfig {
 	readonly patches: readonly PatchInfo[];
 	readonly currentConstructedMetaPatch: number;
+	readonly currentTwistMetaPatch: number;
 	readonly currentBattlegroundsMetaPatch: number;
 	readonly currentDuelsMetaPatch: number;
 	readonly currentArenaMetaPatch: number;
