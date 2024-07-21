@@ -343,6 +343,24 @@ export class S3 {
 			});
 		});
 	}
+
+	public async copy(originBucket: string, originKey: string, destinationBucket: string, destinationKey: string) {
+		return new Promise<boolean>((resolve, reject) => {
+			const params: S3AWS.CopyObjectRequest = {
+				Bucket: destinationBucket,
+				CopySource: `${originBucket}/${originKey}`,
+				Key: destinationKey,
+			};
+			this.s3.copyObject(params, (err, data) => {
+				if (err) {
+					console.error('could not copy object', err, params);
+					resolve(false);
+				} else {
+					resolve(true);
+				}
+			});
+		});
+	}
 }
 
 export class S3Multipart {
