@@ -1,37 +1,44 @@
-import { AWSError, S3 as S3AWS } from 'aws-sdk';
 import {
-	DeleteObjectsOutput,
-	DeleteObjectsRequest,
+	CopyObjectCommand,
+	CopyObjectCommandInput,
+	CreateMultipartUploadCommandOutput,
+	DeleteObjectsCommand,
+	DeleteObjectsCommandInput,
+	DeleteObjectsCommandOutput,
+	GetObjectCommand,
+	GetObjectCommandInput,
+	GetObjectCommandOutput,
 	GetObjectRequest,
-	ListObjectsV2Request,
-	Metadata,
+	ListObjectsV2Command,
+	ListObjectsV2CommandInput,
+	ListObjectsV2CommandOutput,
+	ListObjectsV2Output,
 	ObjectCannedACL,
-	ObjectList,
-	PutObjectRequest,
-} from 'aws-sdk/clients/s3';
-import { PromiseResult } from 'aws-sdk/lib/request';
+	PutObjectCommand,
+	PutObjectCommandInput,
+	S3 as S3AWSv3,
+} from '@aws-sdk/client-s3';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import * as JSZip from 'jszip';
 import { loadAsync } from 'jszip';
 import { Readable } from 'stream';
 import { gunzipSync } from 'zlib';
 
 export class S3 {
-	private readonly s3: S3AWS;
+	private readonly s3: S3AWSv3;
 
 	constructor(options?: { timeout?: number; connectTimeout?: number }) {
-		this.s3 = new S3AWS({
+		this.s3 = new S3AWSv3({
 			region: 'us-west-2',
-			httpOptions: {
-				timeout: options?.timeout ?? 2_000, // time succeed in starting the call
-				connectTimeout: options?.connectTimeout ?? 3_000, // time to wait for a response
-				// the aws-sdk defaults to automatically retrying
-				// if one of these limits are met.
-			},
+			requestHandler: new NodeHttpHandler({
+				connectionTimeout: options?.connectTimeout ?? 3_000,
+				requestTimeout: options?.timeout ?? 2_000,
+			}),
 		});
 	}
 
-	public async getObjectMetaData(bucketName: string, key: string): Promise<Metadata> {
-		return new Promise<Metadata>(resolve => {
+	public async getObjectMetaData(bucketName: string, key: string): Promise<GetObjectCommandOutput['Metadata']> {
+		return new Promise<GetObjectCommandOutput['Metadata']>(resolve => {
 			const params: GetObjectRequest = {
 				Bucket: bucketName,
 				Key: key,
@@ -138,7 +145,7 @@ export class S3 {
 			callback(null);
 			return;
 		}
-		const input = { Bucket: bucketName, Key: key };
+		const input: GetObjectCommandInput = { Bucket: bucketName, Key: key };
 		this.s3.getObject(input, async (err, data) => {
 			if (err) {
 				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
@@ -189,15 +196,13 @@ export class S3 {
 		type = 'application/json',
 		chunkSize = 50_000,
 	): Promise<void> {
-		const multipartCreateResult = await this.s3
-			.createMultipartUpload({
-				Bucket: bucket,
-				Key: fileName,
-				ContentType: type,
-				ACL: 'public-read',
-				StorageClass: 'STANDARD',
-			})
-			.promise();
+		const multipartCreateResult = await this.s3.createMultipartUpload({
+			Bucket: bucket,
+			Key: fileName,
+			ContentType: type,
+			ACL: 'public-read',
+			StorageClass: 'STANDARD',
+		});
 
 		// let currentIndex = 0;
 		let chunkCount = 1;
@@ -207,15 +212,13 @@ export class S3 {
 			// const data = content.slice(currentIndex, currentIndex + chunkSize);
 			// console.log('uploading multipart data', chunkCount, ' ', data.length);
 			const strBody = data.map(d => JSON.stringify(d)).join('\n');
-			const uploadPromiseResult = await this.s3
-				.uploadPart({
-					Body: strBody,
-					Bucket: bucket,
-					Key: fileName,
-					PartNumber: chunkCount,
-					UploadId: multipartCreateResult.UploadId,
-				})
-				.promise();
+			const uploadPromiseResult = await this.s3.uploadPart({
+				Body: strBody,
+				Bucket: bucket,
+				Key: fileName,
+				PartNumber: chunkCount,
+				UploadId: multipartCreateResult.UploadId,
+			});
 			// console.log('multipart data upload result', uploadPromiseResult);
 
 			uploadPartResults.push({
@@ -227,29 +230,26 @@ export class S3 {
 			chunkCount++;
 		}
 
-		const completeUploadResponse = await this.s3
-			.completeMultipartUpload({
-				Bucket: bucket,
-				Key: fileName,
-				MultipartUpload: {
-					Parts: uploadPartResults,
-				},
-				UploadId: multipartCreateResult.UploadId,
-			})
-			.promise();
+		const completeUploadResponse = await this.s3.completeMultipartUpload({
+			Bucket: bucket,
+			Key: fileName,
+			MultipartUpload: {
+				Parts: uploadPartResults,
+			},
+			UploadId: multipartCreateResult.UploadId,
+		});
 		// console.log('multipart upload complete', completeUploadResponse);
 	}
 
-	public readStream(bucketName: string, key: string): Readable {
+	public async readStream(bucketName: string, key: string): Promise<Readable | null> {
 		try {
-			const stream = this.s3
-				.getObject({
-					Bucket: bucketName,
-					Key: key,
-				})
-				.createReadStream();
-			const finalStream = stream;
-			return finalStream;
+			const command = new GetObjectCommand({
+				Bucket: bucketName,
+				Key: key,
+			});
+			const response = await this.s3.send(command);
+			const stream = response.Body as Readable;
+			return stream;
 		} catch (e) {
 			console.error('could not read stream', e, bucketName, key);
 			return null;
@@ -264,32 +264,24 @@ export class S3 {
 		encoding?: 'gzip' | null,
 		ACL: ObjectCannedACL | null = 'public-read',
 	): Promise<boolean> {
-		return new Promise<boolean>((resolve, reject) => {
-			try {
-				const input: PutObjectRequest = {
-					Body: type === 'application/json' && encoding !== 'gzip' ? JSON.stringify(content) : content,
-					Bucket: bucket,
-					Key: fileName,
-					ACL: ACL,
-					ContentType: type,
-				};
-				if (encoding) {
-					input.ContentEncoding = encoding;
-				}
-				// console.debug('writing');
-				this.s3.upload(input, (err, data) => {
-					// console.debug('upload over', err, data);
-					if (err) {
-						console.error('could not upload file to S3', err, input);
-						resolve(false);
-						return;
-					}
-					resolve(true);
-				});
-			} catch (e) {
-				console.error('Exception while writing file', e);
+		try {
+			const input: PutObjectCommandInput = {
+				Body: type === 'application/json' && encoding !== 'gzip' ? JSON.stringify(content) : content,
+				Bucket: bucket,
+				Key: fileName,
+				ACL: ACL,
+				ContentType: type,
+			};
+			if (encoding) {
+				input.ContentEncoding = encoding;
 			}
-		});
+
+			const command = new PutObjectCommand(input);
+			const response = await this.s3.send(command);
+			return response.$metadata.httpStatusCode === 200;
+		} catch (e) {
+			console.error('Exception while writing file', e);
+		}
 	}
 
 	public async loadReplayString(replayKey: string): Promise<string> {
@@ -316,50 +308,50 @@ export class S3 {
 		callback(data);
 	}
 
-	public async loadAllFileKeys(bucket: string, folder: string): Promise<ObjectList> {
-		return new Promise<ObjectList>((resolve, reject) => {
-			const request: ListObjectsV2Request = {
-				Bucket: bucket,
-				Prefix: folder,
-			};
-			this.s3.listObjectsV2(request, (err, data) => {
-				resolve(data.Contents);
-			});
-		});
+	public async loadAllFileKeys(bucket: string, folder: string): Promise<ListObjectsV2Output['Contents']> {
+		const request: ListObjectsV2CommandInput = {
+			Bucket: bucket,
+			Prefix: folder,
+		};
+		try {
+			const command = new ListObjectsV2Command(request);
+			const data: ListObjectsV2CommandOutput = await this.s3.send(command);
+			return data.Contents || [];
+		} catch (err) {
+			console.error('could not list objects in S3', err);
+			return [];
+		}
 	}
 
-	public async deleteFiles(bucket: string, keys: readonly string[]): Promise<DeleteObjectsOutput> {
-		return new Promise<DeleteObjectsOutput>((resolve, reject) => {
-			const request: DeleteObjectsRequest = {
-				Bucket: bucket,
-				Delete: {
-					Objects: keys.map(key => ({
-						Key: key,
-					})),
-				},
-			};
-			this.s3.deleteObjects(request, (err, data) => {
-				resolve(data);
-			});
-		});
+	public async deleteFiles(bucket: string, keys: readonly string[]): Promise<DeleteObjectsCommandOutput> {
+		const request: DeleteObjectsCommandInput = {
+			Bucket: bucket,
+			Delete: {
+				Objects: keys.map(key => ({
+					Key: key,
+				})),
+			},
+		};
+
+		const command = new DeleteObjectsCommand(request);
+		const data = await this.s3.send(command);
+		return data;
 	}
 
 	public async copy(originBucket: string, originKey: string, destinationBucket: string, destinationKey: string) {
-		return new Promise<boolean>((resolve, reject) => {
-			const params: S3AWS.CopyObjectRequest = {
-				Bucket: destinationBucket,
-				CopySource: `${originBucket}/${originKey}`,
-				Key: destinationKey,
-			};
-			this.s3.copyObject(params, (err, data) => {
-				if (err) {
-					console.error('could not copy object', err, params);
-					resolve(false);
-				} else {
-					resolve(true);
-				}
-			});
-		});
+		const params: CopyObjectCommandInput = {
+			Bucket: destinationBucket,
+			CopySource: `${originBucket}/${originKey}`,
+			Key: destinationKey,
+		};
+		try {
+			const command = new CopyObjectCommand(params);
+			const data = await this.s3.send(command);
+			return data.$metadata.httpStatusCode === 200;
+		} catch (err) {
+			console.error('could not copy object', err, params);
+			return false;
+		}
 	}
 }
 
@@ -368,38 +360,34 @@ export class S3Multipart {
 		return this._processing;
 	}
 
-	private currentUpload: PromiseResult<S3AWS.CreateMultipartUploadOutput, AWSError>;
+	private currentUpload: CreateMultipartUploadCommandOutput;
 	private currentPart = 1;
 	private uploadPartResults: { PartNumber: number; ETag: string }[] = [];
 	private _processing = false;
 
-	constructor(private readonly s3: S3AWS) {}
+	constructor(private readonly s3: S3AWSv3) {}
 
 	public initMultipart = async (bucket: string, fileName: string, type = 'application/json') => {
 		this._processing = true;
-		this.currentUpload = await this.s3
-			.createMultipartUpload({
-				Bucket: bucket,
-				Key: fileName,
-				ContentType: type,
-				ACL: 'public-read',
-				StorageClass: 'STANDARD',
-			})
-			.promise();
+		this.currentUpload = await this.s3.createMultipartUpload({
+			Bucket: bucket,
+			Key: fileName,
+			ContentType: type,
+			ACL: 'public-read',
+			StorageClass: 'STANDARD',
+		});
 		this._processing = false;
 	};
 
 	public uploadPart = async (content: string) => {
 		this._processing = true;
-		const result = await this.s3
-			.uploadPart({
-				Body: content,
-				Bucket: this.currentUpload.Bucket,
-				Key: this.currentUpload.Key,
-				PartNumber: this.currentPart,
-				UploadId: this.currentUpload.UploadId,
-			})
-			.promise();
+		const result = await this.s3.uploadPart({
+			Body: content,
+			Bucket: this.currentUpload.Bucket,
+			Key: this.currentUpload.Key,
+			PartNumber: this.currentPart,
+			UploadId: this.currentUpload.UploadId,
+		});
 		this.uploadPartResults.push({
 			PartNumber: this.currentPart,
 			ETag: result.ETag,
@@ -417,16 +405,14 @@ export class S3Multipart {
 		// 	this.currentUpload.Key,
 		// 	this.currentUpload.UploadId,
 		// );
-		await this.s3
-			.completeMultipartUpload({
-				Bucket: this.currentUpload.Bucket,
-				Key: this.currentUpload.Key,
-				MultipartUpload: {
-					Parts: this.uploadPartResults,
-				},
-				UploadId: this.currentUpload.UploadId,
-			})
-			.promise();
+		await this.s3.completeMultipartUpload({
+			Bucket: this.currentUpload.Bucket,
+			Key: this.currentUpload.Key,
+			MultipartUpload: {
+				Parts: this.uploadPartResults,
+			},
+			UploadId: this.currentUpload.UploadId,
+		});
 		this._processing = false;
 	};
 }
