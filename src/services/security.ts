@@ -1,8 +1,13 @@
-import SecretsManager, { GetSecretValueRequest, GetSecretValueResponse } from 'aws-sdk/clients/secretsmanager';
+import {
+	GetSecretValueCommand,
+	GetSecretValueCommandOutput,
+	GetSecretValueRequest,
+	SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { JwtPayload, decode, verify } from 'jsonwebtoken';
 import fetch from 'node-fetch';
 
-const secretsManager = new SecretsManager({ region: 'us-west-2' });
+const secretsManager = new SecretsManagerClient({ region: 'us-west-2' });
 
 export const validateOwToken = async (token: string): Promise<TokenValidationResult> => {
 	if (!token?.length) {
@@ -53,13 +58,16 @@ export interface TokenValidationResult {
 	readonly nickname?: string;
 }
 
-const getSecret = (secretRequest: GetSecretValueRequest) => {
-	return new Promise<SecretInfo>(resolve => {
-		secretsManager.getSecretValue(secretRequest, (err, data: GetSecretValueResponse) => {
-			const secretInfo: SecretInfo = JSON.parse(data.SecretString);
-			resolve(secretInfo);
-		});
-	});
+const getSecret = async (secretRequest: GetSecretValueRequest): Promise<SecretInfo> => {
+	try {
+		const command = new GetSecretValueCommand(secretRequest);
+		const data: GetSecretValueCommandOutput = await secretsManager.send(command);
+		const secretInfo: SecretInfo = JSON.parse(data.SecretString || '{}');
+		return secretInfo;
+	} catch (err) {
+		console.error('could not get secret value', err);
+		return null;
+	}
 };
 
 interface SecretInfo {

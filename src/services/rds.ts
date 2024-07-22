@@ -1,10 +1,14 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 /* eslint-disable @typescript-eslint/no-var-requires */
-import { SecretsManager } from 'aws-sdk';
-import { GetSecretValueRequest, GetSecretValueResponse } from 'aws-sdk/clients/secretsmanager';
+import {
+	GetSecretValueCommand,
+	GetSecretValueCommandOutput,
+	GetSecretValueRequest,
+	SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { default as MySQLServerless, ServerlessMysql, default as serverlessMysql } from 'serverless-mysql';
 
-const secretsManager = new SecretsManager({ region: 'us-west-2' });
+const secretsManager = new SecretsManagerClient({ region: 'us-west-2' });
 let connection, connectionPromise;
 
 export const getConnection = async (): Promise<serverlessMysql.ServerlessMysql> => {
@@ -76,13 +80,16 @@ export const runQuery = async (mysql: ServerlessMysql, query: string, debug = fa
 	return result;
 };
 
-const getSecret = (secretRequest: GetSecretValueRequest) => {
-	return new Promise<SecretInfo>(resolve => {
-		secretsManager.getSecretValue(secretRequest, (err, data: GetSecretValueResponse) => {
-			const secretInfo: SecretInfo = JSON.parse(data.SecretString);
-			resolve(secretInfo);
-		});
-	});
+const getSecret = async (secretRequest: GetSecretValueRequest): Promise<SecretInfo> => {
+	try {
+		const command = new GetSecretValueCommand(secretRequest);
+		const data: GetSecretValueCommandOutput = await secretsManager.send(command);
+		const secretInfo: SecretInfo = JSON.parse(data.SecretString || '{}');
+		return secretInfo;
+	} catch (err) {
+		console.error('could not get secret value', err);
+		return null;
+	}
 };
 
 interface SecretInfo {

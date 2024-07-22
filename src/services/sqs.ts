@@ -1,4 +1,4 @@
-import { SQS } from 'aws-sdk';
+import { SQS } from '@aws-sdk/client-sqs';
 
 export class Sqs {
 	private readonly sqs: SQS;
