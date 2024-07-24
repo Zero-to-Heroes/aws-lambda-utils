@@ -1,4 +1,4 @@
-import fetch, { RequestInfo } from 'node-fetch';
+import { RequestInfo } from 'node-fetch';
 
 export function partitionArray<T>(array: readonly T[], partitionSize: number): readonly T[][] {
 	const workingCopy: T[] = [...array];
@@ -10,6 +10,7 @@ export function partitionArray<T>(array: readonly T[], partitionSize: number): r
 }
 
 export async function http(request: RequestInfo, options?: any): Promise<string> {
+	const fetch = (await import('node-fetch')).default;
 	return new Promise(resolve => {
 		fetch(request, options)
 			.then(

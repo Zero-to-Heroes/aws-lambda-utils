@@ -5,7 +5,6 @@ import {
 	SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { JwtPayload, decode, verify } from 'jsonwebtoken';
-import fetch from 'node-fetch';
 
 const secretsManager = new SecretsManagerClient({ region: 'us-west-2' });
 
@@ -20,6 +19,7 @@ export const validateOwToken = async (token: string): Promise<TokenValidationRes
 		return null;
 	}
 
+	const fetch = (await import('node-fetch')).default;
 	const response = await fetch(
 		`https://accounts.overwolf.com/tokens/short-lived/users/profile?extensionId=lnknbakkpommmjjdnelmfbjjdbocfpnpbkijjnob`,
 		{
