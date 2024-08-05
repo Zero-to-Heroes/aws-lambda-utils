@@ -138,7 +138,7 @@ export class S3 {
 		});
 	}
 
-	private readZippedContentInternal(bucketName: string, key: string, callback, retriesLeft = 10) {
+	private async readZippedContentInternal(bucketName: string, key: string, callback, retriesLeft = 10) {
 		// console.debug('trying to read zipped content', bucketName, key, retriesLeft);
 		if (retriesLeft <= 0) {
 			console.error('could not read s3 object', bucketName, key);
@@ -146,31 +146,19 @@ export class S3 {
 			return;
 		}
 		const input: GetObjectCommandInput = { Bucket: bucketName, Key: key };
-		this.s3.getObject(input, async (err, data) => {
-			if (err) {
-				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
-				setTimeout(() => {
-					this.readZippedContentInternal(bucketName, key, callback, retriesLeft - 1);
-				}, 1000);
-				return;
-			}
-			try {
-				// console.debug('success, loadAsync');
-				const zipContent = await loadAsync(data.Body as any);
-				// console.debug('zipContent loaded');
-				const file = Object.keys(zipContent.files)[0];
-				// console.debug('file retrieve', file);
-				const objectContent = await zipContent.file(file).async('string');
-				// console.debug('objectContent', objectContent?.substring(0, 200));
-				callback(objectContent);
-			} catch (e) {
-				console.warn('could not read s3 object', bucketName, key, err, retriesLeft, e);
-				setTimeout(() => {
-					this.readZippedContentInternal(bucketName, key, callback, retriesLeft - 1);
-				}, 1000);
-				return;
-			}
-		});
+		try {
+			const data = await this.s3.send(new GetObjectCommand(input));
+			const buffer = await streamToBuffer(data.Body as Readable);
+			const zipContent = await loadAsync(buffer);
+			const file = Object.keys(zipContent.files)[0];
+			const objectContent = await zipContent.file(file).async('string');
+			callback(objectContent);
+		} catch (err) {
+			console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+			setTimeout(() => {
+				this.readZippedContentInternal(bucketName, key, callback, retriesLeft - 1);
+			}, 1000);
+		}
 	}
 
 	public async writeCompressedFile(content: any, bucket: string, fileName: string): Promise<boolean> {
@@ -416,3 +404,13 @@ export class S3Multipart {
 		this._processing = false;
 	};
 }
+
+// Utility function to convert stream to buffer
+const streamToBuffer = async (stream: Readable): Promise<Buffer> => {
+	return new Promise((resolve, reject) => {
+		const chunks: Buffer[] = [];
+		stream.on('data', chunk => chunks.push(chunk));
+		stream.on('end', () => resolve(Buffer.concat(chunks)));
+		stream.on('error', reject);
+	});
+};
