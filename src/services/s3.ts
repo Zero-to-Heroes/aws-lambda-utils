@@ -81,7 +81,6 @@ export class S3 {
 			callback(objectContent);
 		});
 	}
-
 	public async readGzipContent(
 		bucketName: string,
 		key: string,
@@ -94,7 +93,7 @@ export class S3 {
 		});
 	}
 
-	private readGzipContentInternal(
+	private async readGzipContentInternal(
 		bucketName: string,
 		key: string,
 		callback,
@@ -109,27 +108,27 @@ export class S3 {
 			callback(null);
 			return;
 		}
-		const input = { Bucket: bucketName, Key: key };
-		this.s3.getObject(input, (err, data) => {
-			if (err) {
-				if (retriesLeft - 1 <= 0) {
-					if (logFileNotFound) {
-						console.error('could not read s3 object', bucketName, key);
-					}
-					callback(null);
-					return;
-				}
+		const input: GetObjectCommandInput = { Bucket: bucketName, Key: key };
+		try {
+			const data = await this.s3.send(new GetObjectCommand(input));
+			const buffer = await streamToBuffer(data.Body as Readable);
+			const result = gunzipSync(buffer).toString('utf8');
+			callback(result);
+		} catch (err) {
+			if (retriesLeft - 1 <= 0) {
 				if (logFileNotFound) {
-					console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+					console.error('could not read s3 object', bucketName, key);
 				}
-				setTimeout(() => {
-					this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1, logFileNotFound, timeout);
-				}, timeout);
+				callback(null);
 				return;
 			}
-			const result = gunzipSync(data.Body as any).toString('utf8');
-			callback(result);
-		});
+			if (logFileNotFound) {
+				console.warn('could not read s3 object', bucketName, key, err, retriesLeft);
+			}
+			setTimeout(() => {
+				this.readGzipContentInternal(bucketName, key, callback, retriesLeft - 1, logFileNotFound, timeout);
+			}, timeout);
+		}
 	}
 
 	public async readZippedContent(bucketName: string, key: string, retries = 3): Promise<string> {
@@ -139,7 +138,6 @@ export class S3 {
 	}
 
 	private async readZippedContentInternal(bucketName: string, key: string, callback, retriesLeft = 10) {
-		// console.debug('trying to read zipped content', bucketName, key, retriesLeft);
 		if (retriesLeft <= 0) {
 			console.error('could not read s3 object', bucketName, key);
 			callback(null);
