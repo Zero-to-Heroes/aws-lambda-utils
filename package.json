@@ -1,6 +1,6 @@
 {
 	"name": "@firestone-hs/aws-lambda-utils",
-	"version": "1.0.5",
+	"version": "1.0.6",
 	"description": "",
 	"scripts": {
 		"publish-version": "rm -rf dist && tsc && rm -rf dist/node_modules && npm publish --access public"

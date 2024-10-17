@@ -1,8 +1,11 @@
+import { ServerlessMysql } from 'serverless-mysql';
 import SqlString from 'sqlstring';
-import { getConnection } from './rds';
 
-export const getAllUserIds = async (inputUserId: string, userName?: string): Promise<readonly string[]> => {
-	const mysql = await getConnection();
+export const getAllUserIds = async (
+	mysql: ServerlessMysql,
+	inputUserId: string,
+	userName?: string,
+): Promise<readonly string[]> => {
 	const escape = SqlString.escape;
 	const userSelectQuery = `
 			SELECT DISTINCT userId FROM user_mapping
@@ -22,6 +25,5 @@ export const getAllUserIds = async (inputUserId: string, userName?: string): Pro
 	console.debug('running query', userSelectQuery);
 	const userIds: any[] = await mysql.query(userSelectQuery);
 	console.debug('got user result', userIds.length);
-	await mysql.end();
 	return userIds.map(result => result.userId);
 };
