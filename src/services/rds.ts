@@ -69,6 +69,35 @@ export const getConnectionReadOnly = async (): Promise<serverlessMysql.Serverles
 	return connectionPromise;
 };
 
+export const getConnectionProxy = async (): Promise<serverlessMysql.ServerlessMysql> => {
+	const connect = async (): Promise<serverlessMysql.ServerlessMysql> => {
+		const secretRequest: GetSecretValueRequest = {
+			SecretId: 'rds-proxy',
+		};
+		const secret: SecretInfo = await getSecret(secretRequest);
+		const config = {
+			host: secret.host,
+			user: secret.username,
+			password: secret.password,
+			database: 'replay_summary',
+			port: secret.port,
+		};
+		connection = MySQLServerless({ config });
+
+		return connection;
+	};
+
+	if (connection) {
+		return connection;
+	}
+	if (connectionPromise) {
+		return connectionPromise;
+	}
+	connectionPromise = connect();
+
+	return connectionPromise;
+};
+
 export const runQuery = async (mysql: ServerlessMysql, query: string, debug = false): Promise<any[]> => {
 	if (debug) {
 		console.log('running query', query);
