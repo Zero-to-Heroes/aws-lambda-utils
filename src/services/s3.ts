@@ -37,6 +37,19 @@ export class S3 {
 		});
 	}
 
+	public async uploadImage(array: Uint8Array, bucket: string, fileName: string): Promise<boolean> {
+		const params: PutObjectCommandInput = {
+			Body: array,
+			Bucket: bucket,
+			Key: fileName,
+			ACL: 'public-read',
+			ContentType: 'image/png',
+		};
+		const command = new PutObjectCommand(params);
+		const response = await this.s3.send(command);
+		return response.$metadata.httpStatusCode === 200;
+	}
+
 	public async getObjectMetaData(bucketName: string, key: string): Promise<GetObjectCommandOutput['Metadata']> {
 		return new Promise<GetObjectCommandOutput['Metadata']>(resolve => {
 			const params: GetObjectRequest = {
