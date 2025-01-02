@@ -43,10 +43,23 @@ export const decode = (base64: string): string => {
 	return str;
 };
 
-export const groupByFunction = <T>(keyExtractor: (obj: T) => string | number) => (
+// export const groupByFunction = <T>(keyExtractor: (obj: T) => string | number) => (
+// 	array: readonly T[],
+// ): { [key: string]: readonly T[] } => {
+// 	return (array ?? []).reduce((objectsByKeyValue, obj) => {
+// 		const value = keyExtractor(obj);
+// 		objectsByKeyValue[value] = objectsByKeyValue[value] ?? [];
+// 		// Using push instead of concat is thousands of times faster on big arrays
+// 		objectsByKeyValue[value].push(obj);
+// 		return objectsByKeyValue;
+// 	}, {});
+// };
+
+export const groupByFunction = <T>(
 	array: readonly T[],
+	keyExtractor: (obj: T) => string | number,
 ): { [key: string]: readonly T[] } => {
-	return (array ?? []).reduce((objectsByKeyValue, obj) => {
+	return (array ?? []).reduce((objectsByKeyValue: { [key: string]: T[] }, obj) => {
 		const value = keyExtractor(obj);
 		objectsByKeyValue[value] = objectsByKeyValue[value] ?? [];
 		// Using push instead of concat is thousands of times faster on big arrays
