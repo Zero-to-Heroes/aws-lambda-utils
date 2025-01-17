@@ -55,10 +55,7 @@ export const decode = (base64: string): string => {
 // 	}, {});
 // };
 
-export const groupByFunction = <T>(
-	array: readonly T[],
-	keyExtractor: (obj: T) => string | number,
-): { [key: string]: readonly T[] } => {
+export const groupByFunction = <T>(array: readonly T[], keyExtractor: (obj: T) => string | number): { [key: string]: readonly T[] } => {
 	return (array ?? []).reduce((objectsByKeyValue: { [key: string]: T[] }, obj) => {
 		const value = keyExtractor(obj);
 		objectsByKeyValue[value] = objectsByKeyValue[value] ?? [];
