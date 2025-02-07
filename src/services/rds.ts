@@ -6,6 +6,7 @@ import {
 	GetSecretValueRequest,
 	SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import { createPool, MysqlError, PoolConnection } from 'mysql';
 import { default as MySQLServerless, ServerlessMysql, default as serverlessMysql } from 'serverless-mysql';
 
 const secretsManager = new SecretsManagerClient({ region: 'us-west-2' });
@@ -107,6 +108,52 @@ export const runQuery = async (mysql: ServerlessMysql, query: string, debug = fa
 		console.log('result', result);
 	}
 	return result;
+};
+
+export const streamQuery = async <T>(
+	queryStr: string,
+	onRow: (row: T, connection: PoolConnection) => Promise<void>,
+	onEnd: () => Promise<void>,
+): Promise<void> => {
+	const secretRequest: GetSecretValueRequest = {
+		SecretId: 'rds-proxy',
+	};
+	const secret: SecretInfo = await getSecret(secretRequest);
+	const pool = createPool({
+		connectionLimit: 1,
+		host: secret.host,
+		user: secret.username,
+		password: secret.password,
+		database: 'replay_summary',
+		port: secret.port,
+	});
+	return new Promise<void>(resolve => {
+		pool.getConnection(async (err: MysqlError, connection: PoolConnection) => {
+			if (err) {
+				console.log('error with connection', err);
+				throw new Error('Could not connect to DB');
+			}
+			const query = connection.query(queryStr);
+			query
+				.on('error', err => {
+					console.error('error while fetching rows', err);
+				})
+				// .on('fields', (fields) => {
+				// 	console.log('fields', fields);
+				// })
+				.on('result', async (row: T) => {
+					await onRow(row, connection);
+				})
+				.on('end', async () => {
+					await onEnd();
+					connection.release();
+					pool.end(err => {
+						console.log('ending pool', err);
+					});
+					resolve();
+				});
+		});
+	});
 };
 
 const getSecret = async (secretRequest: GetSecretValueRequest): Promise<SecretInfo> => {
